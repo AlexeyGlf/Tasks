@@ -1,0 +1,743 @@
+public class EmployeeControlViewModel : EmployeeDetailControlViewModel
+    {
+    }
+public class EmployeeListControlViewModel : ViewModelCRUD
+    {
+        private ObservableCollection<Employee> _allEmployee = new ObservableCollection<Employee>();
+        public ObservableCollection<Employee> AllEmployee
+        {
+            get => _allEmployee;
+            set
+            {
+                _allEmployee = value;
+                OnPropertyChanged("AllEmployee");
+            }
+        }
+
+        public virtual void LoadAllEmployee()
+        {
+            DentistOfficeDBEntities db = null;
+            try
+            {
+                db = new DentistOfficeDBEntities();
+                AllEmployee = new ObservableCollection<Employee>(db.Employees.OrderBy(b => b.RoleID));
+            }
+            catch (Exception ex)
+            {
+
+                System.Diagnostics.Debug.WriteLine(ex.ToString());
+            }
+        }
+    }
+
+public class EmployeeDetailControlViewModel : EmployeeListControlViewModel
+    {
+        private Employee _detailEmployee = new Employee();
+        private Employee _copyEmployee = new Employee();
+        public Employee DetailEmployee
+        {
+            get => _detailEmployee;
+            set
+            {
+                _detailEmployee = value;
+                OnPropertyChanged("DetailEmployee");
+            }
+        }
+        public Employee CopyEmployee
+        {
+            get => _copyEmployee;
+            set
+            {
+                _copyEmployee = value;
+                OnPropertyChanged("CopyEmployee");
+            }
+        }
+
+        public override void LoadAllEmployee()
+        {
+            base.LoadAllEmployee();
+
+            if (AllEmployee.Count > 0)
+            {
+                DetailEmployee = AllEmployee[0];
+            }
+        }
+
+        public override void BeginEdit(bool isAddMode = false)
+        {
+            base.Clone<Employee>(DetailEmployee, _copyEmployee);
+
+            if (isAddMode)
+            {
+                DetailEmployee = new Employee();
+            }
+
+            base.BeginEdit(isAddMode);
+        }
+
+        public override void CancelEdit()
+        {
+            base.CancelEdit();
+
+            base.Clone<Employee>(_copyEmployee, DetailEmployee);
+        }
+
+        public override bool Save()
+        {
+            bool result = false;
+            DentistOfficeDBEntities db = null;
+            try
+            {
+                db = new DentistOfficeDBEntities();
+                if (IsAddMode)
+                {
+                    db.Employees.Add(DetailEmployee);
+                }
+                else
+                {
+                    db.Entry(DetailEmployee).State = EntityState.Modified;
+                }
+                db.SaveChanges();
+
+                result = true;
+
+                _copyEmployee = DetailEmployee;
+
+                if (IsAddMode)
+                {
+                    AllEmployee.Add(DetailEmployee);
+                }
+
+                CancelEdit();
+            }
+            catch (Exception ex)
+            {
+                PublishException(ex);
+            }
+
+            return result;
+        }
+
+        public override bool Delete()
+        {
+            bool result = false;
+            int index = 0;
+            DentistOfficeDBEntities db = null;
+            Employee employeeModel;
+
+            try
+            {
+                db = new DentistOfficeDBEntities();
+                employeeModel = db.Employees.Find(DetailEmployee.EmployeeID);
+                if (employeeModel != null)
+                {
+                    index = db.Employees.ToList().IndexOf(employeeModel);
+                    db.Employees.Remove(employeeModel);
+                    db.SaveChanges();
+                    result = true;
+
+                    AllEmployee.Remove(DetailEmployee);
+                    if (AllEmployee.Count > 0)
+                    {
+                        index++;
+                        if (index > AllEmployee.Count)
+                        {
+                            index = AllEmployee.Count - 1;
+                        }
+                        DetailEmployee = AllEmployee[index];
+                    }
+                    else
+                    {
+                        DetailEmployee = null;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                PublishException(ex);
+            }
+            return result;
+        }
+    }
+}
+<UserControl x:Class="Sia.CW.View.UserControls.AdminControl.EmployeeControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:local="clr-namespace:Sia.CW.View.UserControls.AdminControl" 
+             xmlns:viewmodel="clr-namespace:Sia.CW.ViewModelLayer.ViewModel;assembly=Sia.CW.ViewModelLayer"
+             mc:Ignorable="d"
+             Loaded="UserControl_Loaded">
+    <UserControl.Resources>
+        <viewmodel:EmployeeControlViewModel x:Key="viewModel"/>
+    </UserControl.Resources>
+
+    <Grid DataContext="{DynamicResource viewModel}"
+          Background="{DynamicResource MainBGColor}">
+        
+        <materialDesign:TransitioningContent  
+            OpeningEffect="{materialDesign:TransitionEffect SlideInFromLeft, Duration=0:0:0.8}">
+            <Border Width="Auto"
+                    Height="Auto"
+                    Margin="10"
+                    Background="White"
+                    Effect="{DynamicResource IconSplashScreenShadow}">
+                <ScrollViewer>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <local:EmployeeListControl Grid.Row="1"
+                                               x:Name="listControl"
+                                               DataContext="{DynamicResource viewModel}"/>
+
+                        <Grid Grid.Row="1"
+                              Grid.Column="1">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <ToolBar Grid.Row="0"
+                                     Margin="10"
+                                     HorizontalAlignment="Center"
+                                     Style="{DynamicResource MaterialDesignToolBar}">
+                                <Button Style="{DynamicResource MaterialDesignOutlinedButton}"
+                                        ToolTip="Добавить"
+                                        Cursor="Hand"
+                                        Click="BtnAdd_Click"
+                                        IsEnabled="{Binding Path=IsListEnabled}">
+                                        <Button.Background>
+                                            <LinearGradientBrush StartPoint="0.5, 0.2"
+                                                             EndPoint="0.5 , 1">
+                                                <GradientStop Color="#09133C"
+                                                          Offset="1"/>
+                                                <GradientStop Color="#23379A"
+                                                          Offset="0"/>
+                                            </LinearGradientBrush>
+                                        </Button.Background>
+                                        <materialDesign:PackIcon Kind="AccountsAdd"
+                                                             Foreground="White"
+                                                             Width="20"
+                                                             Height="20"/>
+                                    </Button>
+
+                                    <Separator/>
+
+                                    <Button Style="{DynamicResource MaterialDesignFlatButton}"
+                                            ToolTip="Редактировать"
+                                            Cursor="Hand"
+                                            Click="BtnEdit_Click"
+                                            IsEnabled="{Binding Path=IsListEnabled}">
+                                        <Button.Background>
+                                            <LinearGradientBrush StartPoint="0.5, 0.2"
+                                                             EndPoint="0.5 , 1">
+                                                <GradientStop Color="#09133C"
+                                                          Offset="1"/>
+                                                <GradientStop Color="#23379A"
+                                                          Offset="0"/>
+                                            </LinearGradientBrush>
+                                        </Button.Background>
+                                        <materialDesign:PackIcon Kind="Edit"
+                                                             Foreground="White"
+                                                             Width="20"
+                                                             Height="20"/>
+                                    </Button>
+
+                                    <Separator/>
+
+                                    <Button Style="{DynamicResource MaterialDesignFlatButton}"
+                                            ToolTip="Удалить"
+                                            Cursor="Hand"
+                                            Click="BtnDelete_Click"
+                                            IsEnabled="{Binding Path=IsListEnabled}">
+                                        <Button.Background>
+                                            <LinearGradientBrush StartPoint="0.5, 0.2"
+                                                             EndPoint="0.5 , 1">
+                                                <GradientStop Color="#09133C"
+                                                          Offset="1"/>
+                                                <GradientStop Color="#23379A"
+                                                          Offset="0"/>
+                                            </LinearGradientBrush>
+                                        </Button.Background>
+                                        <materialDesign:PackIcon Kind="Delete"
+                                                             Foreground="White"
+                                                             Width="20"
+                                                             Height="20"/>
+                                    </Button>
+
+                                    <Separator/>
+
+                                    <Button Style="{DynamicResource MaterialDesignFlatButton}"
+                                            ToolTip="Отмена"
+                                            Cursor="Hand"
+                                            Click="BtnUndo_Click"
+                                            IsEnabled="{Binding Path=IsDetailEnabled}">
+                                        <Button.Background>
+                                            <LinearGradientBrush StartPoint="0.5, 0.2"
+                                                             EndPoint="0.5 , 1">
+                                                <GradientStop Color="#09133C"
+                                                          Offset="1"/>
+                                                <GradientStop Color="#23379A"
+                                                          Offset="0"/>
+                                            </LinearGradientBrush>
+                                        </Button.Background>
+                                        <materialDesign:PackIcon Kind="Cancel"
+                                                             Foreground="White"
+                                                             Width="20"
+                                                             Height="20"/>
+                                    </Button>
+
+                                    <Separator/>
+
+                                <Button Style="{DynamicResource MaterialDesignFlatButton}"
+                                        ToolTip="Сохранить"
+                                        Cursor="Hand"
+                                        Click="BtnSave_Click"
+                                        IsEnabled="{Binding Path=IsDetailEnabled}">
+                                    <Button.Background>
+                                        <LinearGradientBrush StartPoint="0.5, 0.2"
+                                                             EndPoint="0.5 , 1">
+                                            <GradientStop Color="#09133C"
+                                                          Offset="1"/>
+                                            <GradientStop Color="#23379A"
+                                                          Offset="0"/>
+                                        </LinearGradientBrush>
+                                    </Button.Background>
+                                    <materialDesign:PackIcon Kind="FloppyDisc"
+                                                             Foreground="White"
+                                                             Width="20"
+                                                             Height="20"/>
+                                </Button>
+                            </ToolBar>
+                            <local:EmployeeDetailControl Grid.Row="1"
+                                                         x:Name="detailControl"
+                                                         IsEnabled="{Binding Path=IsDetailEnabled}"
+                                                         DataContext="{DynamicResource viewModel}"/>
+                        </Grid>
+
+                        
+                    </Grid>
+                </ScrollViewer>
+            </Border>
+        </materialDesign:TransitioningContent>
+    </Grid>
+ 
+</UserControl>
+
+ public partial class EmployeeControl : UserControl
+    {
+        private EmployeeControlViewModel _viewModel;
+        public EmployeeControl()
+        {
+            InitializeComponent();
+            _viewModel = (EmployeeControlViewModel)this.Resources["viewModel"];
+        }
+
+        private void UserControl_Loaded(object sender, RoutedEventArgs e)
+        {
+            _viewModel.LoadAllEmployee();
+        }
+
+        private void BtnAdd_Click(object sender, RoutedEventArgs e)
+        {
+            _viewModel.BeginEdit(true);
+        }
+
+        private void BtnEdit_Click(object sender, RoutedEventArgs e)
+        {
+            _viewModel.BeginEdit(false);
+        }
+
+        private void BtnDelete_Click(object sender, RoutedEventArgs e)
+        {
+            listControl.DeleteEmployee();
+        }
+
+        private void BtnUndo_Click(object sender, RoutedEventArgs e)
+        {
+            _viewModel.CancelEdit();
+        }
+
+        private void BtnSave_Click(object sender, RoutedEventArgs e)
+        {
+            _viewModel.Save();
+        }
+    }
+<UserControl x:Class="Sia.CW.View.UserControls.AdminControl.EmployeeListControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:local="clr-namespace:Sia.CW.View.UserControls.AdminControl" 
+             xmlns:viewmodel="clr-namespace:Sia.CW.ViewModelLayer.ViewModel;assembly=Sia.CW.ViewModelLayer"
+             mc:Ignorable="d" 
+             d:DesignHeight="450" 
+             d:DesignWidth="800"
+             Loaded="UserControl_Loaded">
+    <ListView ItemsSource="{Binding Path=AllEmployee}"
+              SelectedItem="{Binding Path=DetailEmployee}"
+              IsEnabled="{Binding Path=IsListEnabled}"
+              x:Name="listData"
+              FontSize="15">
+        <ListView.View>
+            <GridView>
+                <GridViewColumn Header=" Изменить ">
+                    <GridViewColumn.HeaderContainerStyle>
+                        <Style TargetType="{x:Type GridViewColumnHeader}">
+                            <Setter Property="Background">
+                                <Setter.Value>
+                                    <LinearGradientBrush StartPoint="0.5, 0.2"
+                                             EndPoint="0.5 , 1">
+                                        <GradientStop Color="#09133C"
+                                          Offset="0"/>
+                                        <GradientStop Color="#23379A"
+                                          Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Setter.Value>
+                            </Setter>
+                            <Setter Property="Foreground" Value="White"/>
+                            <Setter Property="BorderBrush">
+                                <Setter.Value>
+                                    <LinearGradientBrush EndPoint="0.5,1" StartPoint="0.5,0">
+                                        <GradientStop Color="White" Offset="0"/>
+                                        <GradientStop Color="White" Offset="1.0"/>
+                                    </LinearGradientBrush>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </GridViewColumn.HeaderContainerStyle>
+                    <GridViewColumn.CellTemplate>
+                        <DataTemplate>
+                            <Button Style="{DynamicResource MaterialDesignIconButton}"
+                                    Tag="{Binding}"
+                                    ToolTip="Изменить данные работника"
+                                    Cursor="Hand"
+                                    Click="BtnEdit_Click">
+                                <materialDesign:PackIcon Kind="Edit"
+                                                         Foreground="{DynamicResource MainBGColor}"
+                                                         Width="20"
+                                                         Height="20"/>
+                            </Button>
+                        </DataTemplate>
+                    </GridViewColumn.CellTemplate>
+                </GridViewColumn>
+                
+                <GridViewColumn Header=" ФИО "
+                                Width="Auto"
+                                DisplayMemberBinding="{Binding Path=FullName}">
+                    <GridViewColumn.HeaderContainerStyle>
+                        <Style TargetType="{x:Type GridViewColumnHeader}">
+                            <Setter Property="Background">
+                                <Setter.Value>
+                                    <LinearGradientBrush StartPoint="0.5, 0.2"
+                                             EndPoint="0.5 , 1">
+                                        <GradientStop Color="#09133C"
+                                          Offset="0"/>
+                                        <GradientStop Color="#23379A"
+                                          Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Setter.Value>
+                            </Setter>
+                            <Setter Property="Foreground" Value="White"/>
+                            <Setter Property="BorderBrush">
+                                <Setter.Value>
+                                    <LinearGradientBrush EndPoint="0.5,1" StartPoint="0.5,0">
+                                        <GradientStop Color="White" Offset="0"/>
+                                        <GradientStop Color="White" Offset="1.0"/>
+                                    </LinearGradientBrush>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </GridViewColumn.HeaderContainerStyle>
+                </GridViewColumn>
+
+                <GridViewColumn Header=" Телефон "
+                                Width="Auto"
+                                DisplayMemberBinding="{Binding Path=Phone}">
+                    <GridViewColumn.HeaderContainerStyle>
+                        <Style TargetType="{x:Type GridViewColumnHeader}">
+                            <Setter Property="Background">
+                                <Setter.Value>
+                                    <LinearGradientBrush StartPoint="0.5, 0.2"
+                                             EndPoint="0.5 , 1">
+                                        <GradientStop Color="#09133C"
+                                          Offset="0"/>
+                                        <GradientStop Color="#23379A"
+                                          Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Setter.Value>
+                            </Setter>
+                            <Setter Property="Foreground" Value="White"/>
+                            <Setter Property="BorderBrush">
+                                <Setter.Value>
+                                    <LinearGradientBrush EndPoint="0.5,1" StartPoint="0.5,0">
+                                        <GradientStop Color="White" Offset="0"/>
+                                        <GradientStop Color="White" Offset="1.0"/>
+                                    </LinearGradientBrush>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </GridViewColumn.HeaderContainerStyle>
+                </GridViewColumn>
+                
+                <GridViewColumn Header=" Должность "
+                                Width="Auto"
+                                DisplayMemberBinding="{Binding Path=Role.NameOfProfession}">
+                    <GridViewColumn.HeaderContainerStyle>
+                        <Style TargetType="{x:Type GridViewColumnHeader}">
+                            <Setter Property="Background">
+                                <Setter.Value>
+                                    <LinearGradientBrush StartPoint="0.5, 0.2"
+                                             EndPoint="0.5 , 1">
+                                        <GradientStop Color="#09133C"
+                                          Offset="0"/>
+                                        <GradientStop Color="#23379A"
+                                          Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Setter.Value>
+                            </Setter>
+                            <Setter Property="Foreground" Value="White"/>
+                            <Setter Property="BorderBrush">
+                                <Setter.Value>
+                                    <LinearGradientBrush EndPoint="0.5,1" StartPoint="0.5,0">
+                                        <GradientStop Color="White" Offset="0"/>
+                                        <GradientStop Color="White" Offset="1.0"/>
+                                    </LinearGradientBrush>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </GridViewColumn.HeaderContainerStyle>
+                </GridViewColumn>
+
+                <GridViewColumn Header=" Удалить ">
+                    <GridViewColumn.HeaderContainerStyle>
+                        <Style TargetType="{x:Type GridViewColumnHeader}">
+                            <Setter Property="Background">
+                                <Setter.Value>
+                                    <LinearGradientBrush StartPoint="0.5, 0.2"
+                                             EndPoint="0.5 , 1">
+                                        <GradientStop Color="#09133C"
+                                          Offset="0"/>
+                                        <GradientStop Color="#23379A"
+                                          Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Setter.Value>
+                            </Setter>
+                            <Setter Property="Foreground" Value="White"/>
+                            <Setter Property="BorderBrush">
+                                <Setter.Value>
+                                    <LinearGradientBrush EndPoint="0.5,1" StartPoint="0.5,0">
+                                        <GradientStop Color="White" Offset="0"/>
+                                        <GradientStop Color="White" Offset="1.0"/>
+                                    </LinearGradientBrush>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </GridViewColumn.HeaderContainerStyle>
+                    <GridViewColumn.CellTemplate>
+                        <DataTemplate>
+                            <Button Style="{DynamicResource MaterialDesignIconButton}"
+                                    Tag="{Binding}"
+                                    ToolTip="Удалить данные работника"
+                                    Cursor="Hand"
+                                    Click="BtnDelete_Click">
+                                <materialDesign:PackIcon Kind="Delete"
+                                                         Foreground="{DynamicResource MainBGColor}"
+                                                         Width="20"
+                                                         Height="20"/>
+                            </Button>
+                        </DataTemplate>
+                    </GridViewColumn.CellTemplate>
+                </GridViewColumn>
+            </GridView>
+        </ListView.View>
+    </ListView>
+</UserControl>
+public partial class EmployeeListControl : UserControl
+    {
+        private EmployeeControlViewModel _viewModel;
+        public EmployeeListControl()
+        {
+            InitializeComponent();
+        }
+
+        private void UserControl_Loaded(object sender, RoutedEventArgs e)
+        {
+
+            _viewModel = (EmployeeControlViewModel)this.DataContext;
+        }
+
+        private void BtnEdit_Click(object sender, RoutedEventArgs e)
+        {
+            _viewModel.DetailEmployee = (Employee)((Button)sender).Tag;
+            _viewModel.BeginEdit(false);
+        }
+
+        private void BtnDelete_Click(object sender, RoutedEventArgs e)
+        {
+            _viewModel.DetailEmployee = (Employee)((Button)sender).Tag;
+            DeleteEmployee();
+        }
+
+        public void DeleteEmployee()
+        {
+            if (MessageBox.Show($"Удалить сотрудника - [{_viewModel.DetailEmployee.FullName}] ?", 
+                "Системное уведомление", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+            {
+                _viewModel.Delete();
+            }
+
+        }
+    }
+<UserControl x:Class="Sia.CW.View.UserControls.AdminControl.EmployeeDetailControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:local="clr-namespace:Sia.CW.View.UserControls.AdminControl"
+             mc:Ignorable="d" 
+             d:DesignHeight="450" 
+             d:DesignWidth="800"
+             Loaded="UserControl_Loaded">
+    <Border Width="425"
+            Height="150"
+            VerticalAlignment="Top"
+            Margin="10"
+            Effect="{DynamicResource IconSplashScreenShadow}">
+        <Border.Background>
+            <LinearGradientBrush StartPoint="0.5, 0.2"
+                                 EndPoint="0.5 , 1">
+                <GradientStop Color="#09133C"
+                              Offset="1"/>
+                <GradientStop Color="#23379A"
+                              Offset="0"/>
+            </LinearGradientBrush>
+        </Border.Background>
+   
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition/>
+            </Grid.RowDefinitions>
+            
+            <Label Grid.Row="0"
+                   Content="ФИО Работника"
+                   Foreground="White"
+                   FontSize="18"/>
+            <TextBox Grid.Column="1"
+                     Grid.Row="0"
+                     Text="{Binding Path=DetailEmployee.FullName}"
+                     x:Name="TxbFullName"
+                     FontSize="18"
+                     Foreground="White"
+                     materialDesign:TextFieldAssist.UnderlineBrush = "White" />
+
+            <Label Grid.Row="1"
+                   Content="Мобильный телефон"
+                   FontSize="18"
+                   Foreground="White"/>
+            <TextBox Grid.Row="1"
+                     Grid.Column="1"
+                     Text="{Binding Path=DetailEmployee.Phone}"
+                     x:Name="TxbPhone"
+                     FontSize="18"
+                     Foreground="White"
+                     materialDesign:TextFieldAssist.UnderlineBrush = "White"/>
+
+            <Label Grid.Row="2"
+                   Content="Должность"
+                   Foreground="White"
+                   FontSize="18"/>
+            <TextBox Grid.Row="2"
+                     Grid.Column="1"
+                     Text="{Binding Path=DetailEmployee.RoleID}"
+                     Name="TxbRole"
+                     FontSize="18"
+                     Foreground="White"
+                     materialDesign:TextFieldAssist.UnderlineBrush = "White"/>
+
+            <StackPanel Grid.Column="1"
+                        Grid.Row="3"
+                        Orientation="Horizontal"
+                        Margin="10">
+                <Button IsCancel="True"
+                        Cursor="Hand"
+                        Margin="0 0 10 0"
+                        Click="BtnUndo_Click"
+                        IsEnabled="{Binding Path=IsDetailEnabled}"
+                        Background="#09133C"
+                        materialDesign:ButtonProgressAssist.Value = "-1"
+                        materialDesign:ButtonProgressAssist.IsIndicatorVisible = "True"
+                        materialDesign:ButtonProgressAssist.IsIndeterminate = "True">
+                    <StackPanel Orientation="Horizontal">
+                        <materialDesign:PackIcon Kind="Cancel"
+                                                 Foreground="White"
+                                                 Margin="0 0 5 0"/>
+                        <TextBlock Text="Отмена"
+                                   Foreground="White"/>
+                    </StackPanel>
+                </Button>
+
+                <Button IsDefault="True"
+                        Cursor="Hand"
+                        Background="#09133C"
+                        Click="BtnSave_Click"
+                        IsEnabled="{Binding Path=IsDetailEnabled}"
+                        materialDesign:ButtonProgressAssist.Value = "-1"
+                        materialDesign:ButtonProgressAssist.IsIndicatorVisible = "True"
+                        materialDesign:ButtonProgressAssist.IsIndeterminate = "True">
+                    <StackPanel Orientation="Horizontal">
+                        <materialDesign:PackIcon Kind="FloppyDisc"
+                                                 Foreground="White"
+                                                 Margin="0 0 5 0"/>
+                        <TextBlock Text="Сохранить"
+                               Foreground="White"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>
+public partial class EmployeeDetailControl : UserControl
+    {
+        private EmployeeControlViewModel _viewModel;
+        public EmployeeDetailControl()
+        {
+            InitializeComponent();
+        }
+
+        private void UserControl_Loaded(object sender, RoutedEventArgs e)
+        {
+            _viewModel = (EmployeeControlViewModel)this.DataContext;
+        }
+
+        private void BtnUndo_Click(object sender, RoutedEventArgs e)
+        {
+            _viewModel.CancelEdit();
+        }
+
+        private void BtnSave_Click(object sender, RoutedEventArgs e)
+        {
+            _viewModel.Save();
+        }
+    }
